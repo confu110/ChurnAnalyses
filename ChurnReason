@@ -1,0 +1,115 @@
+import os
+os.listdir()
+
+import sqlalchemy as sa
+
+engine=sa.create_engine('sqlite:///telco_churn.db')
+connection=engine.connect()
+
+inspector=sa.inspect(engine)
+table_names=inspector.get_table_names()
+table_names
+
+import pandas as pd
+# churn_sql_string='''
+# SELECT *
+# FROM churn_data
+# LIMIT 5'''
+
+# df_churn = pd.read_sql(churn_sql_string, connection)
+# df_churn.loc[:, 'local_area_code'] = df_churn.loc[:, 'local_area_code'].astype('category')
+
+# cities_sql_string='''
+# SELECT *
+# FROM cities
+# LIMIT 5'''
+
+# df_cities = pd.read_sql(cities_sql_string, connection)
+# df_cities.loc[:, 'area_code'] = df_cities.loc[:, 'area_code'].astype('category')
+# df_cities.dtypes
+
+
+query_join = '''
+SELECT *
+FROM churn_data
+JOIN cities
+ON churn_data.local_area_code = cities.area_code
+'''
+df_comp = pd.read_sql(query_join, connection)
+df_comp
+
+connection.close()
+
+
+df_comp.loc[:, 'international_plan'] = df_comp.loc[:, 'international_plan'].astype('category')
+df_comp.loc[:, 'voice_mail_plan'] = df_comp.loc[:, 'voice_mail_plan'].astype('category')
+df_comp.loc[:, 'local_area_code'] = df_comp.loc[:, 'local_area_code'].astype('int64')
+df_comp.loc[:, 'phone_num'] = df_comp.loc[:, 'phone_num'].astype('int64')
+
+df_comp = df_comp.drop(['area_code'], axis=1)
+df_comp.shape
+
+#Churn: Abwanderung des Kunden (0=Nein , 1=Ja)
+
+df_comp.loc[:, 'churn'].unique()
+df_comp.loc[:, 'city'].unique()
+
+churn = pd.crosstab(index=df_comp.loc[:, 'churn'],
+                   columns=df_comp.loc[:, 'city'])
+print(churn)
+print()
+churn2 = pd.crosstab(index=df_comp.loc[:, 'churn'],
+                   columns='count')
+print(churn2)
+print()
+# Abwanderung der Kunden pro 'city': 
+churn_ratio = pd.crosstab(index=df_comp.loc[:, 'city'],
+                         columns=df_comp.loc[:, 'churn'],
+                         normalize = 'index').sort_values(ascending=False, by=1)
+print('Durchschnittliche Abwanderung über das gesamte df: ',churn_ratio.mean())
+churn_ratio.plot(kind='bar', legend=True, subplots=True);
+
+# Abwanderung der Kunden im Verhältnis zum Gesamten Datenset:
+mask = df_comp.loc[:, 'churn'] == 1
+df_churn = df_comp.loc[mask, ['city']]
+top_churn = pd.crosstab(index=df_churn['city'],
+                        columns='count',
+                        normalize = 'columns').sort_values(ascending=False, by='count')
+print()
+print(top_churn)
+top_churn.plot(kind='bar', legend=False);
+
+plt.style.use('seaborn')
+for i in ['total_eve_charge', 'total_day_charge', 'total_night_charge']:
+    fig, ax = plt.subplots(figsize=(7,3))
+    df_total_charge.groupby('churn')[i].plot(kind='hist', y='churn', x=i , ax=ax, bins=50, legend=True)
+
+import statsmodels.formula.api as smf
+
+# model = smf.logit(formula = 'churn~total_eve_charge + total_day_charge', data=df_comp)
+# results = model.fit()
+# print(results.summary())
+
+
+# model = smf.logit(formula = 'churn~total_night_charge', data=df_comp)
+# results = model.fit()
+# print(results.summary())
+
+
+#Marketingkampagne 1:
+#Die Top 4 Städte nach Abwanderung in Relation zum gesamten Datenset, direkt ansprechen mit einer Plakatkampagne.
+# Dabei handelt es sich um die Städte - Jacksonville, Orlando1, CapeCoral, Orlando2 - die sowohl je Stadtgebiet als auch im Verhältnis zum gesamten Datenset 
+#die höchste Abwanderung verzeichnen. 
+
+#Marketingkampagne 2:
+#Kunden mit einer Day_Charge > 37 $ kontaktieren
+#Betrachtet man die 50%ige Wahrscheinlichkeit, neigen Kunden ab einem Total_Day_Charge von 60$ zur Abwandern.
+# Bei genauerer Betrachtung fällt jedoch auf, dass wenig Kunden 60$ zahlen. Daher muss die direkte Kampange bereits die Kunden ansprechen
+# die mit einer ca.20%igen Wahrscheinlichkeit abwandern werden. 
+#Deshalb ist die Marketingabteilung gut beraten, wenn Sie Kunden mit einer Day-Charge von >= 37$ direkt kontaktieren, um die Abwanderung der Kunden mit zusätzlichen
+#Sonderkonditionen zu verhindern. Ein international_plan ist jedoch nicht die richtige Wahl um Kunden zu binden. Dies beweist die Analyse in 4a
+
+
+# Hint: 
+#     Die Zuverlässigkeit der Vorhersage mit knapp über 5% ist nicht wirklich aussagekräftig. 
+#     Zieht man noch eine weitere Variable hinzu: Total_eve_charge, wird die Zuverlässigkeit ebenfalls nur leicht erhöht. 
