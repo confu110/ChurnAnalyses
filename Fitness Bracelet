@@ -1,0 +1,65 @@
+# Upload & Data Check
+import os
+import pandas as pd
+
+os.listdir()
+df = pd.read_csv('fit_gender.csv', sep=';')
+df.head()
+
+#EDA
+df.shape
+df.plot(kind='scatter', x='height', y='weight')
+import seaborn as sns
+sns.scatterplot(data=df, x='height', y='weight', hue='gender')
+
+#checking .dytpes
+df.dtypes
+df.loc[:, 'gender'] = df.loc[:, 'gender'].astype('category')
+df.isna().sum()
+
+#dropna - not usefull data in this case 
+df = df.dropna(axis=0)
+df.isna().sum()
+
+#descriptive statistics 
+df.describe()
+
+#share : gender in this set of data
+gender_ct = pd.crosstab(index=df.loc[:, 'gender'],
+                       columns='count',
+                       normalize= True)
+gender_ct
+
+#log. regression
+df = df.replace(to_replace = {'gender':{'female':0, 'male':1}})
+df.head()
+
+import statsmodels.formula.api as smf
+
+model_weight = smf.logit(formula='gender~weight', data=df)
+results_weight = model_weight.fit()
+print(results_weight.summary())
+
+model_height = smf.logit(formula='gender~height', data=df)
+results_height = model_height.fit()
+print(results_height.summary())
+intercept = results_height.params['Intercept']
+slope = results_height.params['height']
+X = pd.Series(range(201))
+X_df = pd.DataFrame(X)
+X_df.columns = ['height']
+X_df.head()
+p_y = results_height.predict(X_df)
+p_y.head()
+line_50 = p_y[p_y>=0.5].index[0]
+line_50
+
+#visual
+import matplotlib.pyplot as plt
+
+fig, ax = plt.subplots()
+p_y.plot(ax=ax)
+ax.plot([line_50, line_50], [0,1], linestyle='--', color='red')
+
+#Conclusion
+As p at 50% it is more likely that people with a height of 177cm are male, everthing below it is more likely female.
