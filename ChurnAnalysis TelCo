@@ -1,0 +1,315 @@
+# import data from SQL(ite)-DB
+  import os
+  os.listdir()
+  
+  import sqlalchemy as sa
+  
+  engine=sa.create_engine('sqlite:///telco_churn.db')
+  connection=engine.connect()
+  
+  inspector=sa.inspect(engine)
+  table_names=inspector.get_table_names()
+  table_names
+  
+  import pandas as pd
+  # churn_sql_string='''
+  # SELECT *
+  # FROM churn_data
+  # LIMIT 5'''
+  
+  # df_churn = pd.read_sql(churn_sql_string, connection)
+  # df_churn.loc[:, 'local_area_code'] = df_churn.loc[:, 'local_area_code'].astype('category')
+  
+  # cities_sql_string='''
+  # SELECT *
+  # FROM cities
+  # LIMIT 5'''
+  
+  # df_cities = pd.read_sql(cities_sql_string, connection)
+  # df_cities.loc[:, 'area_code'] = df_cities.loc[:, 'area_code'].astype('category')
+  # df_cities.dtypes
+  query_join = '''
+  SELECT *
+  FROM churn_data
+  JOIN cities
+  ON churn_data.local_area_code = cities.area_code
+  '''
+  df_comp = pd.read_sql(query_join, connection)
+  df_comp
+  
+  connection.close()
+  
+  #EDA
+  df_comp.head()
+  df_comp.shape
+  df_comp.columns
+  df_comp.index
+  df_comp.dtypes
+  
+  df_comp.loc[:, 'international_plan'] = df_comp.loc[:, 'international_plan'].astype('category')
+  df_comp.loc[:, 'voice_mail_plan'] = df_comp.loc[:, 'voice_mail_plan'].astype('category')
+  df_comp.loc[:, 'local_area_code'] = df_comp.loc[:, 'local_area_code'].astype('int64')
+  df_comp.loc[:, 'phone_num'] = df_comp.loc[:, 'phone_num'].astype('int64')
+  
+  df_comp = df_comp.drop(['area_code'], axis=1)
+  df_comp.shape
+  
+  df_comp.describe()
+
+# confusing values turned into true values 
+  import math
+  mask = df_comp.loc[:, 'customer_service_calls'] < 0
+  
+  df_comp.loc[:, 'customer_service_calls'] = abs(df_comp.loc[:, 'customer_service_calls'])
+  df_comp[mask]
+  df_comp.dtypes
+
+  df_comp.loc[:, ['local_area_code', 'phone_num']] = df_comp.loc[:, ['local_area_code', 'phone_num']].astype('category')
+  df_comp.describe()
+  df_comp.isna().sum()
+
+#Question 1: Name the top 4 Cities with the highest churn_ratio!
+  #Churn: Abwanderung des Kunden (0=Nein , 1=Ja)
+
+  df_comp.loc[:, 'churn'].unique()
+  df_comp.loc[:, 'city'].unique()
+  
+  churn = pd.crosstab(index=df_comp.loc[:, 'churn'],
+                     columns=df_comp.loc[:, 'city'])
+  print(churn)
+  print()
+  churn2 = pd.crosstab(index=df_comp.loc[:, 'churn'],
+                     columns='count')
+  print(churn2)
+  print()
+  # Abwanderung der Kunden pro 'city': 
+  churn_ratio = pd.crosstab(index=df_comp.loc[:, 'city'],
+                           columns=df_comp.loc[:, 'churn'],
+                           normalize = 'index').sort_values(ascending=False, by=1)
+  print('Durchschnittliche Abwanderung über das gesamte df: ',churn_ratio.mean())
+  churn_ratio.plot(kind='bar', legend=True, subplots=True);
+  
+  # Abwanderung der Kunden im Verhältnis zum Gesamten Datenset:
+  mask = df_comp.loc[:, 'churn'] == 1
+  df_churn = df_comp.loc[mask, ['city']]
+  top_churn = pd.crosstab(index=df_churn['city'],
+                          columns='count',
+                          normalize = 'columns').sort_values(ascending=False, by='count')
+  print()
+  print(top_churn)
+  top_churn.plot(kind='bar', legend=False);
+
+#Question 2: Which categorial indikator is suitable to refer on the churn?
+  int_plan = pd.crosstab(index=df_comp.loc[:, 'churn'],
+                      columns=df_comp.loc[:, 'international_plan'],
+                      normalize='columns')
+  print(int_plan)
+  
+  v_mail_plan = pd.crosstab(index=df_comp.loc[:, 'churn'],
+                           columns=df_comp.loc[:, 'voice_mail_plan'],
+                           normalize='columns')
+  print(v_mail_plan)
+  
+  mask = (df_comp.loc[:, 'churn'] == 0) & (df_comp.loc[:, 'international_plan'] == 'yes')
+  df_comp[mask]
+  #Es sollten alle Kunden die einen International Plan haben kontaktiert werden, da die Abwanderung trotz gebuchtem Plan mit ca. 42%
+  #sehr hoch ist. Es scheint also, dass der Internantional Plan die Kunden nicht bindet.
+
+#Which numerical indicator show the churn best?
+  import matplotlib.pyplot as plt
+  %matplotlib inline
+  
+  print('account_length: ', len(df_comp.loc[:, 'account_length'].unique()))
+  print()
+  
+  print('number_vmail_messages: ', len(df_comp.loc[:, 'number_vmail_messages'].unique()))
+  print()
+  print('total_day_calls: ', len(df_comp.loc[:, 'total_day_calls'].unique()))
+  print()
+  print('total_eve_calls: ', len(df_comp.loc[:, 'total_eve_calls'].unique()))
+  print()
+  print('total_night_calls: ', len(df_comp.loc[:, 'total_night_calls'].unique()))
+  print()
+  print('customer_service_calls: ', df_comp.loc[:, 'customer_service_calls'].unique())
+  print('ende')
+  fig, ax = plt.subplots(figsize = (15,4), nrows= 1, ncols=6)
+  df_comp.groupby(df_comp.loc[:, 'churn'])['account_length'].hist(ax=ax[0])
+  df_comp.groupby(df_comp.loc[:, 'churn'])['number_vmail_messages'].hist(ax=ax[1])
+  df_comp.groupby(df_comp.loc[:, 'churn'])['total_day_calls'].hist(ax=ax[2])
+  df_comp.groupby(df_comp.loc[:, 'churn'])['total_eve_calls'].hist(ax=ax[3])
+  df_comp.groupby(df_comp.loc[:, 'churn'])['total_night_calls'].hist(ax=ax[4])
+  df_comp.groupby(df_comp.loc[:, 'churn'])['customer_service_calls'].hist(ax=ax[5]);
+  plt.tight_layout()
+#Barplot customer_service_calls
+  for i in ['account_length','number_vmail_messages','total_day_calls',
+            'total_eve_calls','total_night_calls','customer_service_calls']:
+      print(i+': '+str(len(df_comp.loc[:, i].unique())))
+  df_churn_1 = pd.crosstab(index=df_comp.loc[:, 'customer_service_calls'],
+                          columns=df_comp.loc[:, 'churn']).plot(kind='bar')
+#Boxplot
+  plt.style.use('seaborn')
+  for i in ['account_length','number_vmail_messages','total_day_calls',
+            'total_eve_calls','total_night_calls','customer_service_calls']:
+      fig, ax = plt.subplots(figsize=(15,8))
+    df_comp.boxplot(column=i,ax=ax, showfliers=True, by='churn')
+
+#Conclusion: Customer with high tech-problems (calls =4) tend to churn at customer calls >4 (129 Customers)
+  df_comp[(df_comp.loc[:, 'customer_service_calls']>=4) & (df_comp.loc[:, 'churn']==0)]
+
+#log. Regression for float-columns
+  import seaborn as sns
+  sns.heatmap(df_comp.corr(), annot=True, fmt=".1f");
+
+  df_total_charge = pd.DataFrame(df_comp.loc[:, ['total_night_minutes','total_night_charge',
+  'total_eve_minutes',
+  'total_eve_charge',
+  'total_day_minutes',
+  'total_day_charge',
+  'churn']])
+  pd.plotting.scatter_matrix(df_total_charge, figsize=(15,15), );
+  df_total_charge.describe()
+
+#more specific heatmap on the float columns:
+  sns.heatmap(df_total_charge.corr(), annot=True, fmt=".1f");
+
+#histogramm for check up:
+  plt.style.use('seaborn')
+  for i in ['total_eve_minutes', 'total_day_minutes', 'total_night_minutes']:
+      fig, ax = plt.subplots(figsize=(7,3))
+      df_total_charge.groupby('churn')[i].plot(kind='hist', y='churn', x=i , ax=ax, bins=50)
+
+  plt.style.use('seaborn')
+  for i in ['total_eve_charge', 'total_day_charge', 'total_night_charge']:
+      fig, ax = plt.subplots(figsize=(7,3))
+      df_total_charge.groupby('churn')[i].plot(kind='hist', y='churn', x=i , ax=ax, bins=50, legend=True)
+
+#checking and cleaning outliers:
+  day_min_cost = df_total_charge.loc[:, 'total_day_charge'].median()/df_total_charge.loc[:, 'total_day_minutes'].median()
+  day_min_cost
+  mask= df_total_charge.loc[:, 'total_day_minutes']>=400
+  df_total_charge.loc[mask, 'total_day_minutes'] = df_total_charge.loc[:,'total_day_charge']/day_min_cost
+  df_total_charge[mask]
+  plt.scatter(x='total_day_minutes', y='total_day_charge', data=df_total_charge)
+
+  plt.scatter(x='total_eve_charge', y='total_eve_minutes', data=df_total_charge)
+
+#delete unnecessary columns:
+  del df_total_charge['total_day_minutes']
+  del df_total_charge['total_eve_minutes']
+  del df_total_charge['total_night_minutes']
+  df_total_charge
+
+# log. regression visual
+  import statsmodels.formula.api as smf
+  
+  model = smf.logit(formula = 'churn~total_day_charge', data=df_comp)
+  results = model.fit()
+  results.summary()
+  import seaborn as sns
+  X=pd.Series(range(101))
+  X_df = pd.DataFrame(X)
+  X_df.columns=['total_day_charge']
+  
+  p_y=results.predict(X_df)
+  line_50 = p_y[p_y>=0.18].index[0]
+  
+  fig, ax= plt.subplots()
+  
+  p_y.plot(ax=ax)
+  ax.plot([line_50, line_50], [0,1], linestyle='-', color= 'red')
+  line_50
+  test = plt.scatter(df_comp['total_day_charge'], df_comp['churn'], alpha=0.2)
+  line_50
+
+# identify the threasold, when tend customer to churn:
+  mask = (df_comp.loc[:, 'total_day_charge'] >= line_50) & (df_comp.loc[:, 'churn']==0)
+  df_comp[mask]
+
+#Visuals for presentation:
+#Barchart with the top4 cities -> churn-ratio 
+plt.style.use('dark_background')
+  
+  fig, ax = plt.subplots(figsize=(15,6))
+  colors = ['orange', 'orange', 'orange', 'orange'] + ['grey']*(len(churn_ratio[1])-4)
+  churn_ratio[1].plot(kind='bar', legend=False, color=colors, grid=False);
+  plt.axhline(churn_ratio[1].mean(), linestyle='--', color='orange')
+  ax.set_title('Überdurchschnittliche Abwanderungsraten nach Stadtgebiet')
+  ax.annotate(s='durchschn. Abwanderungsrate ca. 14%',
+             xy=[8.65, 0.1],
+             xytext=[8.65, 0.142],
+             arrowprops=None);
+
+#barchart international_plan has no effect on customers churn
+  plt.style.use('dark_background')
+  
+  fig, ax = plt.subplots()
+  int_plan = pd.crosstab(index=df_comp.loc[:, 'churn'],
+                        columns=df_comp.loc[:, 'international_plan'],
+                        normalize='columns')
+  int_plan.plot(kind='bar', legend=True, color=['grey', 'orange'], ax=ax, grid=False)
+  plt.xticks(rotation=0)
+  plt.title('International Plan bindet keine Kunden')
+  plt.xlabel('Abwanderung des Kunden')
+  plt.ylabel('Anteil')
+  plt.xticks([0,1], labels=['NO', 'YES']);
+  
+  for i, container in enumerate(ax.containers):
+      for j, bar in enumerate(container):
+          height = bar.get_height()  # Höhe des Balkens (Wert)
+          ax.text(bar.get_x() + bar.get_width() / 2, height + 0.01, f'{height:.2f}', 
+                  ha='center', va='bottom', color='white')  # Text über dem Balken
+  
+  plt.show()
+
+# barchart customer service_calls:
+  fg, ax = plt.subplots(figsize=(15,6))
+  
+  df_churn_1 = pd.crosstab(index=df_comp.loc[:, 'customer_service_calls'],
+                          columns=df_comp.loc[:, 'churn']).plot(kind='bar', ax=ax, grid=False, color=['grey', 'orange'])
+  plt.xticks(rotation=0)
+  plt.xlabel('Nummer Anrufe')
+  plt.ylabel('Häufigkeit')
+  plt.annotate(s='Kunden die Abwandern werden sobald Anruf >4.0',
+              xy=[4, 120],
+              xytext= [4, 250],
+              arrowprops=dict(facecolor='orange', shrink=0.05));
+
+#log-reg according to total_day_charge and p to churn:
+  X=pd.Series(range(101))
+  X_df = pd.DataFrame(X)
+  X_df.columns=['total_day_charge']
+  
+  p_y=results.predict(X_df)
+  line_50 = p_y[p_y>=0.18].index[0]
+  plt.style.use('dark_background')
+  fig, ax= plt.subplots()
+  
+  p_y.plot(color= 'orange', ax=ax)
+  ax.plot([line_50, line_50], [0,1], linestyle='-', color= 'grey')
+  plt.annotate(s='Kontaktaufnahme mit Kunden ab \nRechnungsbetrag "total_day_charge" 37$',
+              xy=[35,0.18],
+              xytext=[25,0.45],
+              arrowprops= dict(facecolor='orange', shrink=0.05 ))
+  plt.title('Wahrscheinlichkeit der Kundenabwanderung - logReg total_day_charge')
+  plt.xlabel('Total Day Charge in $')
+  plt.ylabel('Wahrscheinlichkeit');
+
+#Conclusion:
+#Marketingkampagne 1:
+#Die Top 4 Städte nach Abwanderung in Relation zum gesamten Datenset, direkt ansprechen mit einer Plakatkampagne.
+# Dabei handelt es sich um die Städte - Jacksonville, Orlando1, CapeCoral, Orlando2 - die sowohl je Stadtgebiet als auch im Verhältnis zum gesamten Datenset 
+#die höchste Abwanderung verzeichnen. 
+
+#Marketingkampagne 2:
+#Kunden mit einer Day_Charge > 37 $ kontaktieren
+#Betrachtet man die 50%ige Wahrscheinlichkeit, neigen Kunden ab einem Total_Day_Charge von 60$ zur Abwandern.
+# Bei genauerer Betrachtung fällt jedoch auf, dass wenig Kunden 60$ zahlen. Daher muss die direkte Kampange bereits die Kunden ansprechen
+# die mit einer ca.20%igen Wahrscheinlichkeit abwandern werden. 
+#Deshalb ist die Marketingabteilung gut beraten, wenn Sie Kunden mit einer Day-Charge von >= 37$ direkt kontaktieren, um die Abwanderung der Kunden mit zusätzlichen
+#Sonderkonditionen zu verhindern. Ein international_plan ist jedoch nicht die richtige Wahl um Kunden zu binden. Dies beweist die Analyse in 4a
+
+
+# Hint: 
+#     Die Zuverlässigkeit der Vorhersage mit knapp über 5% ist nicht wirklich aussagekräftig. 
+#     Zieht man noch eine weitere Variable hinzu: Total_eve_charge, wird die Zuverlässigkeit ebenfalls nur leicht erhöht. 
+
