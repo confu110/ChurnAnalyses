@@ -1,0 +1,71 @@
+Nachfolgend befindet sich eine einfache logistische Vorhersage der Immobilienpreise in London. 
+
+# Establish connection to database
+
+import sqlalchemy as sa
+
+engine = sa.create_engine('sqlite:///house_prices.db')
+connection = engine.connect()
+
+inspector = sa.inspect(engine)
+table = inspector.get_table_names()
+table
+
+# SQL query and close connection to database
+import pandas as pd
+
+query = 'SELECT * FROM properties JOIN details ON properties.ID = details.id'
+
+df=pd.read_sql(query,connection)
+df.head()
+connection.close()
+
+# EDA
+df.shape
+
+df_lo = df[df['City/County']=='London']
+df_lo.shape
+df_lo.isna().sum()
+
+# Calculations and first impression visualisations
+import math 
+
+df_lo.dtypes
+
+df_lo['Price_EUR'] = df_lo['Price_GBP']*1.12
+df_lo['Area in sqm'] = df_lo['Area in sq ft']*0.093
+
+df_lo.plot(kind='scatter', x='EUR', y='Area in sqm' )
+df_lo.head()
+
+# Linear regression 
+
+import statsmodels.formula.api as smf
+
+model = smf.ols(formula="Price_EUR~Q('Area in sqm')", data=df_lo)
+results = model.fit()
+results.summary()
+
+# Calculate predicted property price (in EUR) by area (in square meters)
+intercept = results.params['Intercept']
+slope = results.params["Q('Area in sqm')"]
+
+X = pd.Series(range(1501))
+
+Y_hat = intercept + (slope*X)
+Y_hat
+
+# Visualisation of predicted property price (in EUR) by area (in square meters)
+
+import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
+import seaborn as sns
+fig, ax = plt.subplots()
+
+sns.scatterplot(x='Area in sqm', y='EUR', ax=ax, data=df_lo)
+Y_hat.plot(ax=ax, color='orange')
+ax.set_yticks(range(0,50000000, 10000000))
+ax.set_title('Preisvorhersage auf Basis der Grundfläche')
+ax.yaxis.set_major_formatter(mticker.StrMethodFormatter("{x:,.0f}"))
+ax.set_xlabel('Area in m^2')
+plt.show()
